@@ -54,8 +54,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 export async function generateEmbeddingsBatch(
   texts: string[]
 ): Promise<number[][]> {
-  // Split into chunks of 128 inputs to stay well under limits
-  const batchSize = 128;
+  // Split into chunks of 64 inputs to stay well under limits and reduce rate-limit pressure
+  const batchSize = 64;
   const embeddings: number[][] = [];
   for (let i = 0; i < texts.length; i += batchSize) {
     const slice = texts
@@ -63,7 +63,7 @@ export async function generateEmbeddingsBatch(
       .map((t) => (t.length > 8000 ? t.substring(0, 8000) : t));
     // Retry with backoff for resilience
     let lastErr: unknown;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
       try {
         const response = await openai.embeddings.create({
           model: "text-embedding-3-small",
@@ -75,13 +75,16 @@ export async function generateEmbeddingsBatch(
         break;
       } catch (error) {
         lastErr = error;
-        const delay = 1000 * Math.pow(2, attempt);
+        const jitter = Math.floor(Math.random() * 250);
+        const delay = 1000 * Math.pow(2, attempt) + jitter;
         await new Promise((r) => setTimeout(r, delay));
       }
     }
     if (lastErr) {
       throw lastErr;
     }
+    // Small pacing delay between batches
+    await new Promise((r) => setTimeout(r, 200));
   }
   return embeddings;
 }

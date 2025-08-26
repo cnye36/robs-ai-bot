@@ -395,26 +395,28 @@ export async function upsertChunksAndEmbed(
     message_count: c.count,
   }));
 
-  // Insert or ignore existing by unique hash
-  const { data: inserted, error: insertErr } = await supabase
-    .from("chat_chunks")
-    .upsert(
-      rows.map((r) => ({
-        user_id: userId,
-        chunk_hash: r.hash,
-        participants: r.participants,
-        participants_emails: r.participantEmails,
-        content: r.content,
-        start_time: r.start,
-        end_time: r.end,
-        message_count: r.message_count,
-        original_filename: originalFilename,
-      })),
-      { onConflict: "chunk_hash" }
-    )
-    .select();
-
-  if (insertErr) throw insertErr;
+  // Insert or ignore existing by unique hash (batched to avoid timeouts)
+  let insertedCount = 0;
+  const insertBatchSize = 400;
+  for (let i = 0; i < rows.length; i += insertBatchSize) {
+    const slice = rows.slice(i, i + insertBatchSize).map((r) => ({
+      user_id: userId,
+      chunk_hash: r.hash,
+      participants: r.participants,
+      participants_emails: r.participantEmails,
+      content: r.content,
+      start_time: r.start,
+      end_time: r.end,
+      message_count: r.message_count,
+      original_filename: originalFilename,
+    }));
+    const { data, error } = await supabase
+      .from("chat_chunks")
+      .upsert(slice, { onConflict: "chunk_hash" })
+      .select("id");
+    if (error) throw error;
+    insertedCount += data?.length ?? 0;
+  }
 
   // Find rows missing embeddings and process in pages
   let totalEmbedded = 0;
@@ -451,7 +453,7 @@ export async function upsertChunksAndEmbed(
     }
   }
 
-  return { inserted: inserted?.length ?? 0, embedded: totalEmbedded };
+  return { inserted: insertedCount, embedded: totalEmbedded };
 }
 
 export async function hybridSearch(query: string, userId: string) {

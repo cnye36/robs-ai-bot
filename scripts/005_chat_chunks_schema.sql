@@ -36,6 +36,23 @@ create index if not exists idx_chat_chunks_embedding on public.chat_chunks using
 -- RLS
 alter table public.chat_chunks enable row level security;
 
+-- RLS policies (required!). Without these, all queries will be blocked for authenticated users.
+create policy if not exists "Users can view their own chat chunks"
+  on public.chat_chunks for select
+  using (auth.uid() = user_id);
+
+create policy if not exists "Users can insert their own chat chunks"
+  on public.chat_chunks for insert
+  with check (auth.uid() = user_id);
+
+create policy if not exists "Users can update their own chat chunks"
+  on public.chat_chunks for update
+  using (auth.uid() = user_id);
+
+create policy if not exists "Users can delete their own chat chunks"
+  on public.chat_chunks for delete
+  using (auth.uid() = user_id);
+
 
 
 -- Hybrid search function
