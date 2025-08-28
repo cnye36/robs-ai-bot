@@ -97,7 +97,7 @@ export async function processUserQuery(
     // Use hybrid chunk search going forward
     const [rows, coverage] = await Promise.all([
       hybridSearch(query, userId),
-      getUserCorpusCoverage(userId),
+      getUserCorpusCoverage(),
     ]);
     const context = formatChunksForRAG(rows as ChunkSearchRow[]);
     const coverageHeader = coverage
@@ -477,81 +477,27 @@ export async function hybridSearch(query: string, userId: string) {
   return data ?? [];
 }
 
-export async function getUserCorpusCoverage(userId: string): Promise<{
+export async function getUserCorpusCoverage(): Promise<{
   earliest: string;
   latest: string;
   totalChunks: number;
 } | null> {
   const supabase = await createClient();
-  // Use ordered selects to compute earliest/latest and a head-count for total
-  const [
-    earliestStartRes,
-    earliestEndRes,
-    latestEndRes,
-    latestStartRes,
-    countRes,
-  ] = await Promise.all([
-    supabase
-      .from("chat_chunks")
-      .select("start_time")
-      .eq("user_id", userId)
-      .not("start_time", "is", null)
-      .order("start_time", { ascending: true })
-      .limit(1),
-    supabase
-      .from("chat_chunks")
-      .select("end_time")
-      .eq("user_id", userId)
-      .not("end_time", "is", null)
-      .order("end_time", { ascending: true })
-      .limit(1),
-    supabase
-      .from("chat_chunks")
-      .select("end_time")
-      .eq("user_id", userId)
-      .not("end_time", "is", null)
-      .order("end_time", { ascending: false })
-      .limit(1),
-    supabase
-      .from("chat_chunks")
-      .select("start_time")
-      .eq("user_id", userId)
-      .not("start_time", "is", null)
-      .order("start_time", { ascending: false })
-      .limit(1),
-    supabase
-      .from("chat_chunks")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId),
-  ]);
-
-  const earliestCandidates: Array<string> = [];
-  const latestCandidates: Array<string> = [];
-  const es = (
-    earliestStartRes.data as Array<{ start_time: string }> | null
-  )?.[0]?.start_time;
-  const ee = (earliestEndRes.data as Array<{ end_time: string }> | null)?.[0]
-    ?.end_time;
-  const le = (latestEndRes.data as Array<{ end_time: string }> | null)?.[0]
-    ?.end_time;
-  const ls = (latestStartRes.data as Array<{ start_time: string }> | null)?.[0]
-    ?.start_time;
-  if (es) earliestCandidates.push(es);
-  if (ee) earliestCandidates.push(ee);
-  if (le) latestCandidates.push(le);
-  if (ls) latestCandidates.push(ls);
-
-  const pickMin = (vals: string[]) =>
-    vals.length === 0
-      ? null
-      : vals.reduce((a, b) => (new Date(a) < new Date(b) ? a : b));
-  const pickMax = (vals: string[]) =>
-    vals.length === 0
-      ? null
-      : vals.reduce((a, b) => (new Date(a) > new Date(b) ? a : b));
-
-  const earliest = formatChatDate(pickMin(earliestCandidates));
-  const latest = formatChatDate(pickMax(latestCandidates));
-  const totalChunks = countRes.count ?? 0;
+  type GlobalCoverageRow = {
+    earliest: string | null;
+    latest: string | null;
+    total_chunks: number;
+  };
+  const { data, error } = await supabase.rpc("get_chat_chunks_coverage");
+  if (error) {
+    console.error("Error fetching global corpus coverage:", error);
+    return null;
+  }
+  const row: GlobalCoverageRow | null = Array.isArray(data)
+    ? (data[0] as GlobalCoverageRow) ?? null
+    : (data as GlobalCoverageRow) ?? null;
+  const earliest = formatChatDate(row?.earliest ?? null);
+  const latest = formatChatDate(row?.latest ?? null);
+  const totalChunks = (row?.total_chunks as number) ?? 0;
   return { earliest, latest, totalChunks };
 }
