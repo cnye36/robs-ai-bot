@@ -108,7 +108,7 @@ Instructions:
 - If asked about specific people, dates, or events, look for that information in the context`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-4.1",
       messages: [
         { role: "system", content: systemPrompt },
         ...messages.map((msg) => ({
@@ -116,8 +116,8 @@ Instructions:
           content: msg.content,
         })),
       ],
-      temperature: 0.7,
-      max_tokens: 1000,
+      temperature: 0.3,
+      max_tokens: 2000,
     });
 
     return (

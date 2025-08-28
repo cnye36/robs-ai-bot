@@ -8,8 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Send, Bot, Upload } from "lucide-react"
+import { Send, Bot } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import type { Components } from "react-markdown"
 
 interface ChatMessage {
   id: string
@@ -31,7 +34,29 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  type CodeProps = React.ComponentPropsWithoutRef<'code'> & { inline?: boolean }
+  const CodeRenderer = ({ inline, className, children, ...props }: CodeProps) => {
+    const languageMatch = /language-(\w+)/.exec(className || "")
+    if (inline) {
+      return (
+        <code
+          className="rounded px-1.5 py-0.5 bg-black/20 dark:bg-white/20 font-mono text-[0.875em]"
+          {...props}
+        >
+          {children}
+        </code>
+      )
+    }
+    return (
+      <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background/70 p-3">
+        <code className={languageMatch ? className : undefined} {...props}>
+          {children}
+        </code>
+      </pre>
+    )
+  }
+
 
   useEffect(() => {
     if (threadId) {
@@ -157,52 +182,7 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
     }
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!file.name.toLowerCase().endsWith(".json")) {
-      alert("Please upload a JSON file containing your chat history.")
-      return
-    }
-
-    const formData = new FormData()
-    formData.append("file", file)
-    formData.append("filename", file.name)
-
-    try {
-      const response = await fetch("/api/upload-chat-history", {
-        method: "POST",
-        body: formData,
-      })
-
-      let result
-      const contentType = response.headers.get("content-type")
-
-      if (contentType && contentType.includes("application/json")) {
-        result = await response.json()
-      } else {
-        // Handle HTML error pages or plain text responses
-        const text = await response.text()
-        result = { error: `Server error: ${response.status} ${response.statusText}` }
-        console.error("Non-JSON response:", text)
-      }
-
-      if (response.ok && result.success) {
-        alert(`Successfully processed ${result.processed} messages from your chat history!`)
-      } else {
-        alert(`Error uploading file: ${result.error || "Unknown error occurred"}`)
-      }
-    } catch (error) {
-      console.error("Error uploading file:", error)
-      alert("Error uploading file. Please check your connection and try again.")
-    }
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-  }
+  
 
   if (!threadId) {
     return (
@@ -213,16 +193,7 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
           <p className="text-muted-foreground mb-4">
             Start a new conversation or select an existing chat from the sidebar
           </p>
-          <div className="space-y-2">
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Chat History
-            </Button>
-            <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
-            <p className="text-xs text-muted-foreground">
-              Upload a JSON file containing your chat history to enable intelligent search
-            </p>
-          </div>
+          
         </div>
       </div>
     )
@@ -241,16 +212,66 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
             <div className="text-center">
               <Bot className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
               <p className="text-muted-foreground mb-4">Start a conversation</p>
-              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="mr-2 h-3 w-3" />
-                Upload Chat History
-              </Button>
-              <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
+              
             </div>
           </div>
         ) : (
           <div className="space-y-4 max-w-4xl mx-auto">
             {messages.map((message) => (
+              (() => {
+                const markdownComponents: Components = {
+                  code: CodeRenderer,
+                  a({ children, ...props }) {
+                    return (
+                      <a
+                        className="underline underline-offset-2 hover:opacity-80"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        {...props}
+                      >
+                        {children as React.ReactNode}
+                      </a>
+                    )
+                  },
+                  ul(props) {
+                    return <ul className="list-disc pl-5 my-2 space-y-1" {...props} />
+                  },
+                  ol(props) {
+                    return <ol className="list-decimal pl-5 my-2 space-y-1" {...props} />
+                  },
+                  li(props) {
+                    return <li className="my-1" {...props} />
+                  },
+                  p(props) {
+                    return <p className="my-2" {...props} />
+                  },
+                  h1(props) {
+                    return <h1 className="text-lg font-semibold my-2" {...props} />
+                  },
+                  h2(props) {
+                    return <h2 className="text-base font-semibold my-2" {...props} />
+                  },
+                  h3(props) {
+                    return <h3 className="text-base font-medium my-2" {...props} />
+                  },
+                  blockquote(props) {
+                    return <blockquote className="border-l-4 pl-3 my-2 opacity-80" {...props} />
+                  },
+                  table(props) {
+                    return (
+                      <div className="my-2 overflow-x-auto">
+                        <table className="min-w-full border-collapse" {...props} />
+                      </div>
+                    )
+                  },
+                  th(props) {
+                    return <th className="border px-2 py-1 text-left" {...props} />
+                  },
+                  td(props) {
+                    return <td className="border px-2 py-1 align-top" {...props} />
+                  },
+                }
+                return (
               <div
                 key={message.id}
                 className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
@@ -269,7 +290,11 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
                       : "bg-card text-card-foreground border"
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  <div className="text-sm leading-relaxed">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
                 {message.role === "user" && (
                   <Avatar className="h-8 w-8 bg-secondary">
@@ -279,6 +304,8 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
                   </Avatar>
                 )}
               </div>
+                )
+              })()
             ))}
             {isLoading && (
               <div className="flex gap-3 justify-start">

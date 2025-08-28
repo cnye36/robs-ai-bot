@@ -4,9 +4,17 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Plus, MessageSquare, MoreHorizontal, Trash2, LogOut } from "lucide-react"
+import {
+  Plus,
+  MessageSquare,
+  MoreHorizontal,
+  Trash2,
+  LogOut,
+  Upload,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { useRef } from "react";
 
 interface ChatThread {
   id: string
@@ -33,7 +41,7 @@ export function ChatSidebar({
   user,
 }: ChatSidebarProps) {
   const router = useRouter()
-
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const handleSignOut = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -54,12 +62,69 @@ export function ChatSidebar({
     }
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      alert("Please upload a JSON file containing your chat history.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("filename", file.name);
+
+    try {
+      const response = await fetch("/api/upload-chat-history", {
+        method: "POST",
+        body: formData,
+      });
+
+      let result;
+      const contentType = response.headers.get("content-type");
+
+      if (contentType && contentType.includes("application/json")) {
+        result = await response.json();
+      } else {
+        // Handle HTML error pages or plain text responses
+        const text = await response.text();
+        result = {
+          error: `Server error: ${response.status} ${response.statusText}`,
+        };
+        console.error("Non-JSON response:", text);
+      }
+
+      if (response.ok && result.success) {
+        alert(
+          `Successfully processed ${result.processed} messages from your chat history!`
+        );
+      } else {
+        alert(
+          `Error uploading file: ${result.error || "Unknown error occurred"}`
+        );
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert(
+        "Error uploading file. Please check your connection and try again."
+      );
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="w-80 bg-sidebar border-r border-sidebar-border flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-semibold text-sidebar-foreground">Chat History</h1>
+          <h1 className="text-lg font-semibold text-sidebar-foreground">
+            Chat History
+          </h1>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -78,7 +143,10 @@ export function ChatSidebar({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <Button onClick={onNewThread} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+        <Button
+          onClick={onNewThread}
+          className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+        >
           <Plus className="mr-2 h-4 w-4" />
           New Chat
         </Button>
@@ -106,7 +174,9 @@ export function ChatSidebar({
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{thread.title}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(thread.updated_at)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(thread.updated_at)}
+                  </p>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -122,8 +192,8 @@ export function ChatSidebar({
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
                       onClick={(e) => {
-                        e.stopPropagation()
-                        onDeleteThread(thread.id)
+                        e.stopPropagation();
+                        onDeleteThread(thread.id);
                       }}
                       className="text-destructive"
                     >
@@ -137,6 +207,27 @@ export function ChatSidebar({
           )}
         </div>
       </ScrollArea>
+      <div className="space-y-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload className="mr-2 h-3 w-3" />
+          Upload Chat History
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+        <p className="text-xs text-muted-foreground">
+          Upload a JSON file containing your chat history to enable intelligent
+          search
+        </p>
+      </div>
     </div>
-  )
+  );
 }

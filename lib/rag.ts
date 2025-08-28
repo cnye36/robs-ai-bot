@@ -95,9 +95,15 @@ export async function processUserQuery(
 ): Promise<string> {
   try {
     // Use hybrid chunk search going forward
-    const rows = await hybridSearch(query, userId);
+    const [rows, coverage] = await Promise.all([
+      hybridSearch(query, userId),
+      getUserCorpusCoverage(userId),
+    ]);
     const context = formatChunksForRAG(rows as ChunkSearchRow[]);
-    return context;
+    const coverageHeader = coverage
+      ? `Corpus coverage: earliest ${coverage.earliest}, latest ${coverage.latest}, total chunks ${coverage.totalChunks}.\n\n`
+      : "";
+    return coverageHeader + context;
   } catch (error) {
     console.error("Error processing user query:", error);
     throw new Error("Failed to process query");
@@ -463,10 +469,89 @@ export async function hybridSearch(query: string, userId: string) {
     query_text: query,
     query_embedding: embed,
     match_threshold: 0.2,
-    lexical_limit: 300,
-    final_k: 20,
+    lexical_limit: 5000,
+    final_k: 50,
     target_user_id: userId,
   });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getUserCorpusCoverage(userId: string): Promise<{
+  earliest: string;
+  latest: string;
+  totalChunks: number;
+} | null> {
+  const supabase = await createClient();
+  // Use ordered selects to compute earliest/latest and a head-count for total
+  const [
+    earliestStartRes,
+    earliestEndRes,
+    latestEndRes,
+    latestStartRes,
+    countRes,
+  ] = await Promise.all([
+    supabase
+      .from("chat_chunks")
+      .select("start_time")
+      .eq("user_id", userId)
+      .not("start_time", "is", null)
+      .order("start_time", { ascending: true })
+      .limit(1),
+    supabase
+      .from("chat_chunks")
+      .select("end_time")
+      .eq("user_id", userId)
+      .not("end_time", "is", null)
+      .order("end_time", { ascending: true })
+      .limit(1),
+    supabase
+      .from("chat_chunks")
+      .select("end_time")
+      .eq("user_id", userId)
+      .not("end_time", "is", null)
+      .order("end_time", { ascending: false })
+      .limit(1),
+    supabase
+      .from("chat_chunks")
+      .select("start_time")
+      .eq("user_id", userId)
+      .not("start_time", "is", null)
+      .order("start_time", { ascending: false })
+      .limit(1),
+    supabase
+      .from("chat_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId),
+  ]);
+
+  const earliestCandidates: Array<string> = [];
+  const latestCandidates: Array<string> = [];
+  const es = (
+    earliestStartRes.data as Array<{ start_time: string }> | null
+  )?.[0]?.start_time;
+  const ee = (earliestEndRes.data as Array<{ end_time: string }> | null)?.[0]
+    ?.end_time;
+  const le = (latestEndRes.data as Array<{ end_time: string }> | null)?.[0]
+    ?.end_time;
+  const ls = (latestStartRes.data as Array<{ start_time: string }> | null)?.[0]
+    ?.start_time;
+  if (es) earliestCandidates.push(es);
+  if (ee) earliestCandidates.push(ee);
+  if (le) latestCandidates.push(le);
+  if (ls) latestCandidates.push(ls);
+
+  const pickMin = (vals: string[]) =>
+    vals.length === 0
+      ? null
+      : vals.reduce((a, b) => (new Date(a) < new Date(b) ? a : b));
+  const pickMax = (vals: string[]) =>
+    vals.length === 0
+      ? null
+      : vals.reduce((a, b) => (new Date(a) > new Date(b) ? a : b));
+
+  const earliest = formatChatDate(pickMin(earliestCandidates));
+  const latest = formatChatDate(pickMax(latestCandidates));
+  const totalChunks = countRes.count ?? 0;
+  return { earliest, latest, totalChunks };
 }

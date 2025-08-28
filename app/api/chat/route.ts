@@ -5,21 +5,24 @@ import { generateChatResponse } from "@/lib/openai"
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, threadId } = await request.json()
+    const { message, threadId } = await request.json();
 
     if (!message || !threadId) {
-      return NextResponse.json({ error: "Message and threadId are required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Message and threadId are required" },
+        { status: 400 }
+      );
     }
 
     // Get user from session
-    const supabase = await createClient()
+    const supabase = await createClient();
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser()
+    } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Verify thread belongs to user
@@ -28,10 +31,10 @@ export async function POST(request: NextRequest) {
       .select("id")
       .eq("id", threadId)
       .eq("user_id", user.id)
-      .single()
+      .single();
 
     if (threadError || !thread) {
-      return NextResponse.json({ error: "Thread not found" }, { status: 404 })
+      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
     }
 
     // Get recent conversation context
@@ -40,18 +43,17 @@ export async function POST(request: NextRequest) {
       .select("role, content")
       .eq("thread_id", threadId)
       .order("created_at", { ascending: false })
-      .limit(10)
+      .limit(10);
 
     if (messagesError) {
-      console.error("Error fetching recent messages:", messagesError)
+      console.error("Error fetching recent messages:", messagesError);
     }
 
     // Reverse to get chronological order
-    const conversationHistory = (recentMessages || []).reverse()
+    const conversationHistory = (recentMessages || []).reverse();
 
     // Search for relevant chat history using RAG
-    const ragContext = await processUserQuery(message, user.id)
-    console.log("RAG context:", ragContext);
+    const ragContext = await processUserQuery(message, user.id);
 
     // Generate AI response using conversation history and RAG context
     const aiResponse = await generateChatResponse(
@@ -68,17 +70,20 @@ export async function POST(request: NextRequest) {
         content: aiResponse,
       })
       .select()
-      .single()
+      .single();
 
     if (saveError) {
-      console.error("Error saving AI response:", saveError)
-      return NextResponse.json({ error: "Failed to save response" }, { status: 500 })
+      console.error("Error saving AI response:", saveError);
+      return NextResponse.json(
+        { error: "Failed to save response" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       message: savedMessage,
       context: ragContext,
-    })
+    });
   } catch (error) {
     console.error("Error in chat API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server"
 import { upsertChunksAndEmbed, windowMessagesIntoChunks } from "@/lib/rag";
 import { parseChatDate } from "@/lib/utils";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 interface Creator {
   name: string;
   email: string;
@@ -72,6 +75,9 @@ export async function POST(request: NextRequest) {
       console.error("[v0] JSON parse error:", parseError);
       return NextResponse.json({ error: "Invalid JSON file" }, { status: 400 });
     }
+
+    // Proactively strip heavy fields like annotations before processing
+    stripAnnotations(chatData);
 
     // Process the chat data - handle different JSON structures
 
@@ -152,6 +158,21 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  }
+}
+
+function stripAnnotations(obj: unknown): void {
+  if (!obj || typeof obj !== "object") return;
+  if (Array.isArray(obj)) {
+    for (const item of obj) stripAnnotations(item);
+    return;
+  }
+  const record = obj as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(record, "annotations")) {
+    delete record["annotations"];
+  }
+  for (const key of Object.keys(record)) {
+    stripAnnotations(record[key]);
   }
 }
 
