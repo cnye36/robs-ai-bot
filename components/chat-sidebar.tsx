@@ -118,7 +118,7 @@ export function ChatSidebar({
   };
 
   return (
-    <div className="w-80 bg-sidebar border-r border-sidebar-border flex flex-col">
+    <div className="w-105 bg-sidebar border-r border-sidebar-border flex flex-col min-h-0">
       {/* Header */}
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center justify-between mb-4">
@@ -153,7 +153,7 @@ export function ChatSidebar({
       </div>
 
       {/* Chat List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-2">
           {threads.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -165,15 +165,20 @@ export function ChatSidebar({
             threads.map((thread) => (
               <div
                 key={thread.id}
-                className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`group relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
                   activeThreadId === thread.id
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
                     : "hover:bg-sidebar-accent/50"
                 }`}
                 onClick={() => onThreadSelect(thread.id)}
               >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{thread.title}</p>
+                <div className="flex-1 min-w-0 pr-10">
+                  <p
+                    className="text-sm font-medium truncate"
+                    title={thread.title}
+                  >
+                    {thread.title}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {formatDate(thread.updated_at)}
                   </p>
@@ -183,13 +188,13 @@ export function ChatSidebar({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-6 w-6 p-0 absolute right-2 top-1/2 -translate-y-1/2 z-10 opacity-90 hover:opacity-100"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <MoreHorizontal className="h-3 w-3" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" sideOffset={4}>
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
@@ -207,7 +212,16 @@ export function ChatSidebar({
           )}
         </div>
       </ScrollArea>
-      <div className="space-y-2">
+      <div className="space-y-2 p-2 border-t border-sidebar-border">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start"
+          onClick={handleSignOut}
+        >
+          <LogOut className="mr-2 h-3 w-3" />
+          Sign out
+        </Button>
         <Button
           variant="outline"
           size="sm"

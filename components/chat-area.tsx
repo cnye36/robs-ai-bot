@@ -56,7 +56,7 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
       );
     }
     return (
-      <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background/70 p-3">
+      <pre className="mt-2 overflow-x-auto overflow-y-auto max-h-80 rounded-md border border-border bg-background/70 p-3">
         <code className={languageMatch ? className : undefined} {...props}>
           {children}
         </code>
@@ -200,8 +200,6 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
     }
   };
 
-  
-
   if (!threadId) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background">
@@ -219,9 +217,9 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 flex flex-col bg-background min-h-0">
       {/* Messages Area */}
-      <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
+      <ScrollArea ref={scrollAreaRef} className="flex-1 p-4 min-h-0">
         {isLoadingMessages ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-muted-foreground">Loading messages...</div>
@@ -338,7 +336,7 @@ export function ChatArea({ threadId, onUpdateThreadTitle, user }: ChatAreaProps)
                           : "bg-card text-card-foreground border"
                       }`}
                     >
-                      <div className="text-sm leading-relaxed">
+                      <div className="text-sm leading-relaxed break-words [overflow-wrap:anywhere]">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={markdownComponents}

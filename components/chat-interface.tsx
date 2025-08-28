@@ -95,7 +95,7 @@ export function ChatInterface({ user }: ChatInterfaceProps) {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden min-h-0">
       <ChatSidebar
         threads={threads}
         activeThreadId={activeThreadId}
@@ -104,7 +104,11 @@ export function ChatInterface({ user }: ChatInterfaceProps) {
         onDeleteThread={deleteThread}
         user={user}
       />
-      <ChatArea threadId={activeThreadId} onUpdateThreadTitle={updateThreadTitle} user={user} />
+      <ChatArea
+        threadId={activeThreadId}
+        onUpdateThreadTitle={updateThreadTitle}
+        user={user}
+      />
     </div>
-  )
+  );
 }
